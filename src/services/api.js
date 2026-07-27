@@ -5,7 +5,18 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  withCredentials: true, // 🚨 Essential: passes JWT session cookies to Express!
+  withCredentials: true, // 🚨 Essential: passes JWT session cookies to Express where allowed!
+});
+
+// 🛡️ HYBRID AUTH INTERCEPTOR: Automatically attach Bearer Token if cross-domain cloud cookies are blocked!
+api.interceptors.request.use((config) => {
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("auth_token");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+  }
+  return config;
 });
 
 // =======================
@@ -13,15 +24,24 @@ const api = axios.create({
 // =======================
 export async function registerUser({ username, email, password }) {
   const response = await api.post("/api/auth/register", { username, email, password });
+  if (typeof window !== "undefined" && response.data?.token) {
+    localStorage.setItem("auth_token", response.data.token);
+  }
   return response.data;
 }
 
 export async function loginUser({ email, password }) {
   const response = await api.post("/api/auth/login", { email, password });
+  if (typeof window !== "undefined" && response.data?.token) {
+    localStorage.setItem("auth_token", response.data.token);
+  }
   return response.data;
 }
 
 export async function logoutUser() {
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("auth_token");
+  }
   const response = await api.get("/api/auth/logout");
   return response.data;
 }
